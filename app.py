@@ -504,8 +504,6 @@ if not df.empty:
 
         st.divider()
         
-        st.divider()
-        
         # --- Random Map Selector ---
         all_maps = get_all_maps()
         map_names = [m['name'] for m in all_maps] if all_maps else []
@@ -572,8 +570,6 @@ if not df.empty:
                 map_slot.markdown(render_map_box(f"📍 {final_map}", "#d4edda"), unsafe_allow_html=True) 
                 st.balloons() # Optional celebration
 
-        st.divider()
-        
         st.divider()
         
         # --- Bottom Section: Side Select & Result Submit ---
