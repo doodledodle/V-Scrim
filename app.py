@@ -417,11 +417,35 @@ with st.sidebar:
     if st.button("🗺️ 맵 관리하기", use_container_width=True):
         add_map_dialog()
 
-    # Footer
-    st.markdown("---")
+    # Footer (Fixed at Bottom of Sidebar)
     st.markdown(
         """
-        <div style='text-align: center; color: grey; font-size: 10px;'>
+        <style>
+            [data-testid="stSidebar"] > div:nth-child(2) {
+                padding-bottom: 50px;
+            }
+            .sidebar-footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                width: 20%; 
+                text-align: center;
+                padding: 10px;
+                background-color: #f1f3f6; /* Optional: matches default sidebar bg light mode */
+                font-size: 12px;
+                color: #555;
+                font-weight: bold;
+                border-top: 1px solid #ddd;
+                z-index: 99;
+            }
+            /* Adjust width for mobile or different constraints if needed */
+            @media (max-width: 768px) {
+                .sidebar-footer {
+                    width: 50%;
+                }
+            }
+        </style>
+        <div class="sidebar-footer">
             created by doodle
         </div>
         """, 
