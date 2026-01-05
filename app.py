@@ -195,6 +195,24 @@ def remove_from_team(user_id, team):
     elif team == 'B' and user_id in st.session_state.team_b:
         st.session_state.team_b.remove(user_id)
 
+# Helper for Team Win Rate
+def calculate_team_avg_win_rate(team_ids, user_map):
+    if not team_ids:
+        return 0.0
+    total_wr = 0.0
+    valid_members = 0
+    for uid in team_ids:
+        user = user_map.get(uid)
+        if user is not None:
+             # Calculate WR safely
+             games = user.get('total_games', 0)
+             wins = user.get('wins', 0)
+             wr = (wins / games * 100) if games > 0 else 0.0
+             total_wr += wr
+             valid_members += 1
+    
+    return total_wr / valid_members if valid_members > 0 else 0.0
+
 # Sidebar: Sync
 with st.sidebar:
     st.header("설정 (Settings)")
@@ -238,29 +256,44 @@ if not df.empty:
     with tab2:
         st.subheader("새로운 내전 기록")
         
+        # Calculate Team Stats
+        team_a_avg = calculate_team_avg_win_rate(st.session_state.team_a, id_map)
+        team_b_avg = calculate_team_avg_win_rate(st.session_state.team_b, id_map)
+        
         # Display Selected Teams
         col_team_a, col_vs, col_team_b = st.columns([4, 1, 4])
         
         with col_team_a:
-            st.markdown("### 🅰️ A팀")
+            st.markdown(f"### 🅰️ A팀 (평균 승률: {team_a_avg:.1f}%)")
             if st.session_state.team_a:
                 for uid in st.session_state.team_a:
                     u = id_map.get(uid)
                     if u is not None:
-                        st.button(f"{u['display_name']} ({u.get('tier', '-')}) ❌", key=f"del_a_{uid}", on_click=remove_from_team, args=(uid, 'A'))
+                        # Calculate individual WR for display
+                        g = u.get('total_games', 0)
+                        w = u.get('wins', 0)
+                        wr = (w / g * 100) if g > 0 else 0.0
+                        
+                        st.button(f"{u['display_name']} ({u.get('tier', '-')}, {wr:.1f}%) ❌", key=f"del_a_{uid}", on_click=remove_from_team, args=(uid, 'A'))
             else:
                 st.info("선택된 플레이어 없음")
 
         with col_vs:
             st.markdown("<h3 style='text-align: center;'>VS</h3>", unsafe_allow_html=True)
+            # Diff
+            diff = abs(team_a_avg - team_b_avg)
+            st.markdown(f"<div style='text-align: center; color: gray; font-size: 0.8em;'>차이: {diff:.1f}%</div>", unsafe_allow_html=True)
 
         with col_team_b:
-             st.markdown("### 🅱️ B팀")
+             st.markdown(f"### 🅱️ B팀 (평균 승률: {team_b_avg:.1f}%)")
              if st.session_state.team_b:
                 for uid in st.session_state.team_b:
                     u = id_map.get(uid)
                     if u is not None:
-                        st.button(f"{u['display_name']} ({u.get('tier', '-')}) ❌", key=f"del_b_{uid}", on_click=remove_from_team, args=(uid, 'B'))
+                        g = u.get('total_games', 0)
+                        w = u.get('wins', 0)
+                        wr = (w / g * 100) if g > 0 else 0.0
+                        st.button(f"{u['display_name']} ({u.get('tier', '-')}, {wr:.1f}%) ❌", key=f"del_b_{uid}", on_click=remove_from_team, args=(uid, 'B'))
              else:
                 st.info("선택된 플레이어 없음")
 
@@ -300,8 +333,6 @@ if not df.empty:
         # Ordered Rank List for Display
         RANK_ORDER = ["레디언트", "불멸", "초월자", "다이아몬드", "플래티넘", "골드", "실버", "브론즈", "아이언", "언랭"]
         
-        # If searching, show flattened list or still grouped? Grouped is fine.
-        
         for rank in RANK_ORDER:
             # Filter users in this rank
             rank_users = filtered_df[filtered_df['tier'] == rank]
@@ -312,7 +343,8 @@ if not df.empty:
                         uid = row['id']
                         c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
                         c1.write(f"**{row['display_name']}**")
-                        c2.caption(row.get('roles', '-')) 
+                        # Show WR in list
+                        c2.caption(f"{row.get('roles', '-')} | 승률: {row['win_rate']:.1f}%") 
                         
                         # Check availability (Visual feedback)
                         is_selected = uid in st.session_state.team_a or uid in st.session_state.team_b
@@ -322,6 +354,7 @@ if not df.empty:
                         else:
                             c3.button("➕ A", key=f"add_a_{uid}", on_click=add_to_team, args=(uid, 'A'))
                             c4.button("➕ B", key=f"add_b_{uid}", on_click=add_to_team, args=(uid, 'B'))
+
 
 else:
     st.info("등록된 멤버가 없습니다. 왼쪽 사이드바에서 '디스코드 멤버 동기화'를 눌러주세요.")
