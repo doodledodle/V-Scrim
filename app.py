@@ -400,22 +400,20 @@ def add_map_dialog():
 @st.dialog("고급 설정 (Advanced Settings)")
 def advanced_settings_dialog():
     st.write("### ⚙️ 표시 설정")
+    st.caption("변경 사항을 적용하려면 하단의 확인 버튼을 눌러주세요.")
     
-    # Toggle for Individual Win Rate
-    # Default is True, so we use checkboxes
-    show_individual = st.checkbox("개인 승률 표시 (Player Win Rate)", value=st.session_state.show_individual_wr)
-    if show_individual != st.session_state.show_individual_wr:
-        st.session_state.show_individual_wr = show_individual
-        st.rerun()
-
-    # Toggle for Team Win Rate
-    show_team = st.checkbox("팀 평균 승률 표시 (Team Avg Win Rate)", value=st.session_state.show_team_wr)
-    if show_team != st.session_state.show_team_wr:
-        st.session_state.show_team_wr = show_team
-        st.rerun()
+    # Use local keys for form-like behavior
+    # We initialize them with current session state
+    
+    new_show_individual = st.checkbox("개인 승률 표시 (Player Win Rate)", value=st.session_state.show_individual_wr)
+    new_show_team = st.checkbox("팀 평균 승률 표시 (Team Avg Win Rate)", value=st.session_state.show_team_wr)
     
     st.divider()
-    st.caption("설정은 현재 세션 동안 유지됩니다.")
+    
+    if st.button("확인 (Apply)", type="primary", use_container_width=True):
+        st.session_state.show_individual_wr = new_show_individual
+        st.session_state.show_team_wr = new_show_team
+        st.rerun()
 
 # Sidebar: Sync & Maps
 with st.sidebar:
@@ -497,15 +495,23 @@ if not df.empty:
     
     with tab1:
         st.subheader("📊 순위표")
+        
+        # Select columns based on settings
+        lb_cols = ['display_name', 'tier', 'wins', 'total_games']
+        lb_config = {
+            "display_name": "플레이어",
+            "tier": "티어",
+            "wins": "승리",
+            "total_games": "전체 게임"
+        }
+        
+        if st.session_state.show_individual_wr:
+            lb_cols.append('win_rate')
+            lb_config["win_rate"] = st.column_config.NumberColumn("승률 (%)", format="%.1f %%")
+            
         st.dataframe(
-            df_sorted[['display_name', 'tier', 'wins', 'total_games', 'win_rate']],
-            column_config={
-                "display_name": "플레이어",
-                "tier": "티어",
-                "wins": "승리",
-                "total_games": "전체 게임",
-                "win_rate": st.column_config.NumberColumn("승률 (%)", format="%.1f %%")
-            },
+            df_sorted[lb_cols],
+            column_config=lb_config,
             hide_index=True,
             use_container_width=True
         )
@@ -728,8 +734,12 @@ if not df.empty:
                         with cols[idx % 3]:
                             with st.container(border=True):
                                 st.markdown(f"**{row['display_name']}**")
-                                # Show Tier and WR
-                                st.caption(f"{rank} | 승률: {row['win_rate']:.1f}%")
+                                # Show Tier and WR conditionally
+                                info_text = f"{rank}"
+                                if st.session_state.show_individual_wr:
+                                    info_text += f" | 승률: {row['win_rate']:.1f}%"
+                                    
+                                st.caption(info_text)
                                 
                                 is_selected = uid in st.session_state.team_a or uid in st.session_state.team_b
                                 
