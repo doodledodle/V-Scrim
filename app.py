@@ -489,7 +489,7 @@ if not df.empty:
         all_maps = get_all_maps()
         map_names = [m['name'] for m in all_maps] if all_maps else []
         
-        st.markdown("#### 🗺️ 맵 선택")
+        # Remove Header "#### 🗺️ 맵 선택" as requested
         
         # Container for Map Display
         map_container = st.container(border=True)
@@ -554,26 +554,30 @@ if not df.empty:
         st.divider()
         
         # Match Submit
-        st.write("#### 결과 제출")
-        winning_team = st.radio("승리 팀", ("A팀", "B팀"), horizontal=True)
+        st.markdown("### 🏆 승리 팀 선택") # Enlarge Header
+        winning_team = st.radio("승리 팀", ("A팀", "B팀"), horizontal=True, label_visibility="collapsed")
         
-        if st.button("결과 저장하기", type="primary", use_container_width=True):
-            if not st.session_state.team_a or not st.session_state.team_b:
-                st.toast("⚠️ 양 팀에 최소 한 명 이상의 플레이어가 있어야 합니다.", icon="⚠️")
-            elif not st.session_state.selected_map:
-                st.toast("⚠️ 맵이 선택되지 않았습니다. 맵을 돌려주세요!", icon="⚠️")
-            else:
-                mapped_winner = "A" if winning_team == "A팀" else "B"
-                success, msg = record_match(st.session_state.team_a, st.session_state.team_b, mapped_winner, st.session_state.selected_map)
-                if success:
-                    st.success(msg)
-                    st.session_state.team_a = []
-                    st.session_state.team_b = []
-                    st.session_state.selected_map = None
-                    time.sleep(1)
-                    st.rerun()
+        col_submit, _ = st.columns([1, 2]) # Layout adjustment (Left aligned, smaller width)
+        
+        with col_submit:
+            if st.button("결과 저장하기", type="primary", use_container_width=True):
+                if not st.session_state.team_a or not st.session_state.team_b:
+                    st.toast("⚠️ 양 팀에 최소 한 명 이상의 플레이어가 있어야 합니다.", icon="⚠️")
+                elif not st.session_state.selected_map:
+                    st.toast("⚠️ 맵이 선택되지 않았습니다. 맵을 돌려주세요!", icon="⚠️")
                 else:
-                    st.error(f"오류: {msg}")
+                    mapped_winner = "A" if winning_team == "A팀" else "B"
+                    success, msg = record_match(st.session_state.team_a, st.session_state.team_b, mapped_winner, st.session_state.selected_map)
+                    if success:
+                        st.success(msg)
+                        # Remove team reset for Bo3 support
+                        # st.session_state.team_a = [] 
+                        # st.session_state.team_b = []
+                        st.session_state.selected_map = None # Reset map only
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(f"오류: {msg}")
         
         st.divider()
         
