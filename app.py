@@ -483,39 +483,73 @@ if not df.empty:
 
         st.divider()
         
+        st.divider()
+        
         # --- Random Map Selector ---
         all_maps = get_all_maps()
         map_names = [m['name'] for m in all_maps] if all_maps else []
         
         st.markdown("#### 🗺️ 맵 선택")
         
-        col_map_btn, col_map_disp = st.columns([1, 2])
+        # Container for Map Display
+        map_container = st.container(border=True)
         
-        with col_map_btn:
-            spin = st.button("🎰 랜덤 맵 돌리기", type="primary", use_container_width=True)
-            
-        with col_map_disp:
-            map_slot = st.empty()
-            
-            # Use Session State to hold selected map
-            if 'selected_map' not in st.session_state:
-                st.session_state.selected_map = None
-            
-            if spin and map_names:
-                # Animation
+        # Helper to render map box
+        def render_map_box(text, color="#f0f2f6"):
+            return f"""
+            <div style='
+                background-color: {color}; 
+                padding: 20px; 
+                border-radius: 10px; 
+                text-align: center; 
+                margin-bottom: 10px;
+                border: 2px solid #ddd;
+            '>
+                <h2 style='margin: 0; color: #333;'>{text}</h2>
+            </div>
+            """
+
+        # Initialize or Get Session State
+        if 'selected_map' not in st.session_state:
+            st.session_state.selected_map = None
+
+        # Display Area (Always visible)
+        map_slot = map_container.empty()
+        
+        if st.session_state.selected_map:
+            map_slot.markdown(render_map_box(f"📍 {st.session_state.selected_map}", "#d4edda"), unsafe_allow_html=True)
+        else:
+            map_slot.markdown(render_map_box("❓ 맵을 돌려주세요", "#f0f2f6"), unsafe_allow_html=True)
+
+        # Spin Button Area
+        col_spin, _ = st.columns([1, 2]) # Adjust width if needed, or use full width
+        spin = st.button("🎰 랜덤 맵 돌리기 (Spin!)", type="primary", use_container_width=True)
+        
+        if spin:
+            if not map_names:
+                 st.toast("⚠️ 등록된 맵이 없습니다. 사이드바에서 맵을 추가해주세요.", icon="⚠️")
+            else:
+                # Animation Logic
                 import random
-                for _ in range(15):
-                    temp_map = random.choice(map_names)
-                    map_slot.markdown(f"### 🎲 {temp_map}")
-                    time.sleep(0.05) # 50ms
+                import time
                 
+                # Fast spin
+                for _ in range(10):
+                    temp_map = random.choice(map_names)
+                    map_slot.markdown(render_map_box(f"🎲 {temp_map}", "#fff3cd"), unsafe_allow_html=True)
+                    time.sleep(0.08)
+                
+                # Slow down (Suspense)
+                for i in range(5):
+                    temp_map = random.choice(map_names)
+                    map_slot.markdown(render_map_box(f"🎲 {temp_map} ...", "#fff3cd"), unsafe_allow_html=True)
+                    time.sleep(0.1 + (i * 0.1)) # 0.1, 0.2, 0.3, 0.4, 0.5
+                
+                # Final Result
                 final_map = random.choice(map_names)
                 st.session_state.selected_map = final_map
-                map_slot.success(f"### 📍 {final_map}")
-            elif st.session_state.selected_map:
-                map_slot.success(f"### 📍 {st.session_state.selected_map}")
-            elif not map_names:
-                map_slot.warning("등록된 맵이 없습니다. 사이드바에서 맵을 추가해주세요.")
+                map_slot.markdown(render_map_box(f"📍 {final_map}", "#d4edda"), unsafe_allow_html=True) 
+                st.balloons() # Optional celebration
 
         st.divider()
         
