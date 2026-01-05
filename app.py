@@ -195,6 +195,22 @@ def remove_from_team(user_id, team):
     elif team == 'B' and user_id in st.session_state.team_b:
         st.session_state.team_b.remove(user_id)
 
+# Helper for Team Win Rate
+def calculate_team_avg_win_rate(team_ids, user_map):
+    if not team_ids:
+        return 0.0
+    total_wr = 0.0
+    valid_members = 0
+    for uid in team_ids:
+        user = user_map.get(uid)
+        if user is not None:
+             # Calculate WR safely
+             games = user.get('total_games', 0)
+             wins = user.get('wins', 0)
+             wr = (wins / games * 100) if games > 0 else 0.0
+             total_wr += wr
+             valid_members += 1
+    
     return total_wr / valid_members if valid_members > 0 else 0.0
 
 def delete_match(match_id):
