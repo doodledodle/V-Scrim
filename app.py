@@ -195,23 +195,121 @@ def remove_from_team(user_id, team):
     elif team == 'B' and user_id in st.session_state.team_b:
         st.session_state.team_b.remove(user_id)
 
-# Helper for Team Win Rate
-def calculate_team_avg_win_rate(team_ids, user_map):
-    if not team_ids:
-        return 0.0
-    total_wr = 0.0
-    valid_members = 0
-    for uid in team_ids:
-        user = user_map.get(uid)
-        if user is not None:
-             # Calculate WR safely
-             games = user.get('total_games', 0)
-             wins = user.get('wins', 0)
-             wr = (wins / games * 100) if games > 0 else 0.0
-             total_wr += wr
-             valid_members += 1
-    
     return total_wr / valid_members if valid_members > 0 else 0.0
+
+def delete_match(match_id):
+    """Deletes a match and reverts user stats."""
+    try:
+        # 1. Fetch Match Info to know who won
+        match_res = supabase.table("matches").select("*").eq("id", match_id).single().execute()
+        if not match_res.data:
+            return False, "매치를 찾을 수 없습니다."
+        
+        match_data = match_res.data
+        winning_team = match_data['winning_team'] # 'A' or 'B'
+        
+        # 2. Fetch Participants to know who played
+        parts_res = supabase.table("match_participants").select("*").eq("match_id", match_id).execute()
+        participants = parts_res.data
+        
+        # 3. Prepare User Stats Reversion
+        user_ids = [p['user_id'] for p in participants]
+        if user_ids:
+            users_res = supabase.table("users").select("id, wins, total_games").in_("id", user_ids).execute()
+            user_map = {u['id']: u for u in users_res.data}
+            
+            updated_users = []
+            for p in participants:
+                uid = p['user_id']
+                team = p['team'] # 'A' or 'B'
+                
+                user = user_map.get(uid)
+                if user:
+                    # Revert Stats
+                    current_wins = user['wins']
+                    current_total = user['total_games']
+                    
+                    # Logic: If they were on winning team, decrement win. Always decrement total.
+                    # Safety check: don't go below 0
+                    new_wins = current_wins
+                    if team == winning_team:
+                        new_wins = max(0, current_wins - 1)
+                    
+                    new_total = max(0, current_total - 1)
+                    
+                    updated_users.append({
+                        "id": uid,
+                        "wins": new_wins,
+                        "total_games": new_total
+                    })
+            
+            # Update Users
+            if updated_users:
+                 supabase.table("users").upsert(updated_users).execute()
+        
+        # 4. Delete Participants (Must be done before deleting match if no CASCADE)
+        supabase.table("match_participants").delete().eq("match_id", match_id).execute()
+        
+        # 5. Delete Match
+        supabase.table("matches").delete().eq("id", match_id).execute()
+        
+        return True, "매치가 취소(삭제)되었습니다."
+        
+    except Exception as e:
+        return False, str(e)
+
+def get_recent_matches(limit=10):
+    """Fetches recent matches with participant info."""
+    # This is a bit complex with standard supabase client without joins.
+    # We'll fetch matches, then fetch participants for them.
+    try:
+        matches_res = supabase.table("matches").select("*").order("created_at", desc=True).limit(limit).execute()
+        matches = matches_res.data
+        if not matches:
+            return []
+            
+        match_ids = [m['id'] for m in matches]
+        
+        # Fetch participants
+        parts_res = supabase.table("match_participants").select("match_id, team, user_id").in_("match_id", match_ids).execute()
+        parts = parts_res.data
+        
+        # Fetch user names
+        all_user_ids = list(set([p['user_id'] for p in parts]))
+        if all_user_ids:
+            users_res = supabase.table("users").select("id, display_name").in_("id", all_user_ids).execute()
+            user_map = {u['id']: u['display_name'] for u in users_res.data}
+        else:
+            user_map = {}
+            
+        # Group participants by match
+        # Structure: {match_id: {'A': [names], 'B': [names]}}
+        match_details = {}
+        for p in parts:
+            mid = p['match_id']
+            if mid not in match_details:
+                match_details[mid] = {'A': [], 'B': []}
+            
+            u_name = user_map.get(p['user_id'], "Unknown")
+            match_details[mid][p['team']].append(u_name)
+            
+        # Combine
+        full_history = []
+        for m in matches:
+            mid = m['id']
+            details = match_details.get(mid, {'A': [], 'B': []})
+            full_history.append({
+                "id": mid,
+                "created_at": m['created_at'],
+                "winning_team": m['winning_team'],
+                "team_a": ", ".join(details['A']),
+                "team_b": ", ".join(details['B'])
+            })
+            
+        return full_history
+    except Exception as e:
+        st.error(f"기록 불러오기 실패: {str(e)}")
+        return []
 
 # Sidebar: Sync
 with st.sidebar:
@@ -235,15 +333,15 @@ if not df.empty:
     df_sorted = df.sort_values(by=['win_rate', 'wins'], ascending=False)
     id_map = {row['id']: row for _, row in df.iterrows()}
     
-    tab1, tab2 = st.tabs(["🏆 리더보드", "📝 매치 기록"])
+    # Tabs
+    tab1, tab2, tab3 = st.tabs(["🏆 리더보드", "📝 매치 생성", "📜 최근 기록"])
     
     with tab1:
         st.subheader("📊 순위표")
         st.dataframe(
-            df_sorted[['display_name', 'roles', 'tier', 'wins', 'total_games', 'win_rate']],
+            df_sorted[['display_name', 'tier', 'wins', 'total_games', 'win_rate']],
             column_config={
                 "display_name": "플레이어",
-                "roles": "역할",
                 "tier": "티어",
                 "wins": "승리",
                 "total_games": "전체 게임",
@@ -269,7 +367,6 @@ if not df.empty:
                 for uid in st.session_state.team_a:
                     u = id_map.get(uid)
                     if u is not None:
-                        # Calculate individual WR for display
                         g = u.get('total_games', 0)
                         w = u.get('wins', 0)
                         wr = (w / g * 100) if g > 0 else 0.0
@@ -280,7 +377,6 @@ if not df.empty:
 
         with col_vs:
             st.markdown("<h3 style='text-align: center;'>VS</h3>", unsafe_allow_html=True)
-            # Diff
             diff = abs(team_a_avg - team_b_avg)
             st.markdown(f"<div style='text-align: center; color: gray; font-size: 0.8em;'>차이: {diff:.1f}%</div>", unsafe_allow_html=True)
 
@@ -343,10 +439,8 @@ if not df.empty:
                         uid = row['id']
                         c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
                         c1.write(f"**{row['display_name']}**")
-                        # Show WR in list
                         c2.caption(f"{row.get('roles', '-')} | 승률: {row['win_rate']:.1f}%") 
                         
-                        # Check availability (Visual feedback)
                         is_selected = uid in st.session_state.team_a or uid in st.session_state.team_b
                         
                         if is_selected:
@@ -354,6 +448,39 @@ if not df.empty:
                         else:
                             c3.button("➕ A", key=f"add_a_{uid}", on_click=add_to_team, args=(uid, 'A'))
                             c4.button("➕ B", key=f"add_b_{uid}", on_click=add_to_team, args=(uid, 'B'))
+
+    with tab3:
+        st.subheader("📜 최근 매치 기록")
+        st.caption("최근 20개의 매치를 보여줍니다. 잘못 기록된 매치는 삭제(취소)할 수 있습니다.")
+        
+        history = get_recent_matches(limit=20)
+        
+        if history:
+            for match in history:
+                with st.container():
+                    # Parse timestamp (optional formatting)
+                    created_at = match['created_at'][:16].replace("T", " ")
+                    
+                    c1, c2, c3 = st.columns([5, 1, 1])
+                    with c1:
+                        st.markdown(f"**매치 #{match['id']}** ({created_at})")
+                        st.markdown(f"{'🏆' if match['winning_team'] == 'A' else ''} **A팀**: {match['team_a']}")
+                        st.markdown(f"{'🏆' if match['winning_team'] == 'B' else ''} **B팀**: {match['team_b']}")
+                    
+                    with c3:
+                        # Use a callback to delete
+                        if st.button("🗑️ 삭제", key=f"del_match_{match['id']}"):
+                            success, msg = delete_match(match['id'])
+                            if success:
+                                st.success(msg)
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(f"실패: {msg}")
+                    st.divider()
+        else:
+            st.info("아직 기록된 매치가 없습니다.")
+
 
 
 else:
