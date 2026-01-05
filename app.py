@@ -121,47 +121,87 @@ def get_all_users():
     response = supabase.table("users").select("*").execute()
     return response.data
 
-def record_match(team_a_ids, team_b_ids, winning_team):
-    """Records a match result."""
+# Helper for Map Management
+def add_map(map_name):
     try:
-        # 1. Create Match
-        match_res = supabase.table("matches").insert({"winning_team": winning_team}).execute()
+        supabase.table("maps").insert({"name": map_name}).execute()
+        return True, "맵이 추가되었습니다."
+    except Exception as e:
+        return False, str(e)
+
+def delete_map(map_id):
+    try:
+        supabase.table("maps").delete().eq("id", map_id).execute()
+        return True, "맵이 삭제되었습니다."
+    except Exception as e:
+        return False, str(e)
+
+def get_all_maps():
+    try:
+        res = supabase.table("maps").select("*").order("name").execute()
+        return res.data
+    except:
+        return []
+
+def record_match(team_a_ids, team_b_ids, winning_team, map_name):
+    """Records a match result and updates user stats."""
+    # ... (Stats update logic same as before, skipped for brevity but ensure arguments match) ...
+    # Wait. I need to replace the WHOLE function if I change the signature.
+    # Let me include the full logic to be safe.
+    if not team_a_ids or not team_b_ids:
+        return False, "팀 구성원이 부족합니다."
+    
+    try:
+        # 1. Create Match with Map Name
+        match_data = {
+            "winning_team": winning_team,
+            "map_name": map_name
+        }
+        res = supabase.table("matches").insert(match_data).execute()
+        if not res.data:
+            return False, "매치 생성 실패"
         
-        if not match_res.data:
-            return False, "매치 생성 실패."
+        match_id = res.data[0]['id']
         
-        match_id = match_res.data[0]['id']
+        # 2. Add Participants
+        participants = []
+        for uid in team_a_ids:
+            participants.append({"match_id": match_id, "user_id": uid, "team": "A"})
+        for uid in team_b_ids:
+            participants.append({"match_id": match_id, "user_id": uid, "team": "B"})
+            
+        supabase.table("match_participants").insert(participants).execute()
         
-        # 2. Participants & 3. Stats Update
-        participants_data = []
-        all_ids = team_a_ids + team_b_ids
-        
+        # 3. Update User Stats (Wins & Total Games)
         # Fetch current stats
+        all_ids = team_a_ids + team_b_ids
         users_res = supabase.table("users").select("id, wins, total_games").in_("id", all_ids).execute()
         user_map = {u['id']: u for u in users_res.data}
         
         updated_users = []
-        
-        # Helper to process team
-        def process_team(team_ids, team_name, is_winner):
-            for uid in team_ids:
-                participants_data.append({"match_id": match_id, "user_id": uid, "team": team_name})
-                user = user_map.get(uid)
-                if user:
-                    new_wins = user['wins'] + 1 if is_winner else user['wins']
-                    new_total = user['total_games'] + 1
-                    updated_users.append({"id": uid, "wins": new_wins, "total_games": new_total})
-
-        process_team(team_a_ids, "A", winning_team == "A")
-        process_team(team_b_ids, "B", winning_team == "B")
+        for uid in all_ids:
+            user = user_map.get(uid)
+            if user:
+                current_wins = user.get('wins', 0)
+                current_total = user.get('total_games', 0)
                 
-        # Insert Participants
-        supabase.table("match_participants").insert(participants_data).execute()
+                # Determine if user won
+                is_team_a = uid in team_a_ids
+                user_won = (is_team_a and winning_team == 'A') or (not is_team_a and winning_team == 'B')
+                
+                new_wins = current_wins + (1 if user_won else 0)
+                new_total = current_total + 1
+                
+                updated_users.append({
+                    "id": uid,
+                    "wins": new_wins,
+                    "total_games": new_total
+                })
         
-        # Update User Stats
-        supabase.table("users").upsert(updated_users).execute()
-        
-        return True, "매치 기록이 저장되었습니다!"
+        if updated_users:
+            supabase.table("users").upsert(updated_users).execute()
+            
+        return True, "매치 결과가 저장되었습니다!"
         
     except Exception as e:
         return False, str(e)
@@ -318,6 +358,7 @@ def get_recent_matches(limit=10):
                 "id": mid,
                 "created_at": m['created_at'],
                 "winning_team": m['winning_team'],
+                "map_name": m.get('map_name'), # Include map_name
                 "team_a": ", ".join(details['A']),
                 "team_b": ", ".join(details['B'])
             })
@@ -327,7 +368,7 @@ def get_recent_matches(limit=10):
         st.error(f"기록 불러오기 실패: {str(e)}")
         return []
 
-# Sidebar: Sync
+# Sidebar: Sync & Maps
 with st.sidebar:
     st.header("설정 (Settings)")
     if st.button("디스코드 멤버 동기화"):
@@ -339,6 +380,28 @@ with st.sidebar:
                 st.rerun()
             else:
                 st.error(f"실패: {msg}")
+    
+    st.divider()
+    
+    st.header("맵 관리 (Maps)")
+    new_map = st.text_input("새 맵 추가", placeholder="예: 어센트")
+    if st.button("맵 추가"):
+        if new_map:
+            s, m = add_map(new_map)
+            if s: st.success(m); time.sleep(0.5); st.rerun()
+            else: st.error(m)
+            
+    st.write("📋 **등록된 맵**")
+    maps = get_all_maps()
+    if maps:
+        for m in maps:
+            c1, c2 = st.columns([4, 1])
+            c1.caption(m['name'])
+            if c2.button("✖️", key=f"del_map_{m['id']}"):
+                delete_map(m['id'])
+                st.rerun()
+    else:
+        st.caption("등록된 맵이 없습니다.")
 
 # Main Data Fetch
 users = get_all_users()
@@ -368,7 +431,6 @@ if not df.empty:
         )
 
     with tab2:
-        st.subheader("새로운 내전 기록")
         
         # Calculate Team Stats
         team_a_avg = calculate_team_avg_win_rate(st.session_state.team_a, id_map)
@@ -383,10 +445,10 @@ if not df.empty:
                 for uid in st.session_state.team_a:
                     u = id_map.get(uid)
                     if u is not None:
+                         # Calculate individual WR for display
                         g = u.get('total_games', 0)
                         w = u.get('wins', 0)
                         wr = (w / g * 100) if g > 0 else 0.0
-                        
                         st.button(f"{u['display_name']} ({u.get('tier', '-')}, {wr:.1f}%) ❌", key=f"del_a_{uid}", on_click=remove_from_team, args=(uid, 'A'))
             else:
                 st.info("선택된 플레이어 없음")
@@ -411,20 +473,59 @@ if not df.empty:
 
         st.divider()
         
+        # --- Random Map Selector ---
+        all_maps = get_all_maps()
+        map_names = [m['name'] for m in all_maps] if all_maps else []
+        
+        st.markdown("#### 🗺️ 맵 선택")
+        
+        col_map_btn, col_map_disp = st.columns([1, 2])
+        
+        with col_map_btn:
+            spin = st.button("🎰 랜덤 맵 돌리기", type="primary", use_container_width=True)
+            
+        with col_map_disp:
+            map_slot = st.empty()
+            
+            # Use Session State to hold selected map
+            if 'selected_map' not in st.session_state:
+                st.session_state.selected_map = None
+            
+            if spin and map_names:
+                # Animation
+                import random
+                for _ in range(15):
+                    temp_map = random.choice(map_names)
+                    map_slot.markdown(f"### 🎲 {temp_map}")
+                    time.sleep(0.05) # 50ms
+                
+                final_map = random.choice(map_names)
+                st.session_state.selected_map = final_map
+                map_slot.success(f"### 📍 {final_map}")
+            elif st.session_state.selected_map:
+                map_slot.success(f"### 📍 {st.session_state.selected_map}")
+            elif not map_names:
+                map_slot.warning("등록된 맵이 없습니다. 사이드바에서 맵을 추가해주세요.")
+
+        st.divider()
+        
         # Match Submit
         st.write("#### 결과 제출")
         winning_team = st.radio("승리 팀", ("A팀", "B팀"), horizontal=True)
         
-        if st.button("결과 저장하기", type="primary"):
+        if st.button("결과 저장하기", type="primary", use_container_width=True):
             if not st.session_state.team_a or not st.session_state.team_b:
                 st.toast("⚠️ 양 팀에 최소 한 명 이상의 플레이어가 있어야 합니다.", icon="⚠️")
+            elif not st.session_state.selected_map:
+                st.toast("⚠️ 맵이 선택되지 않았습니다. 맵을 돌려주세요!", icon="⚠️")
             else:
                 mapped_winner = "A" if winning_team == "A팀" else "B"
-                success, msg = record_match(st.session_state.team_a, st.session_state.team_b, mapped_winner)
+                success, msg = record_match(st.session_state.team_a, st.session_state.team_b, mapped_winner, st.session_state.selected_map)
                 if success:
                     st.success(msg)
                     st.session_state.team_a = []
                     st.session_state.team_b = []
+                    st.session_state.selected_map = None
                     time.sleep(1)
                     st.rerun()
                 else:
@@ -440,7 +541,7 @@ if not df.empty:
         
         filtered_df = df_sorted
         if search_query:
-            filtered_df = df_sorted[df_sorted['display_name'].str.contains(search_query, case=False) | df_sorted['name'].str.contains(search_query, case=False)]
+            filtered_df = df_sorted[filtered_df['display_name'].str.contains(search_query, case=False) | filtered_df['name'].str.contains(search_query, case=False)]
 
         # Ordered Rank List for Display
         RANK_ORDER = ["레디언트", "불멸", "초월자", "다이아몬드", "플래티넘", "골드", "실버", "브론즈", "아이언", "언랭"]
@@ -467,6 +568,7 @@ if not df.empty:
                                     st.write("✅ **선택됨**")
                                 else:
                                     b1, b2 = st.columns(2)
+                                    # Fix: Don't use duplicate keys in loop
                                     b1.button("➕ A", key=f"add_a_{uid}", on_click=add_to_team, args=(uid, 'A'), use_container_width=True)
                                     b2.button("➕ B", key=f"add_b_{uid}", on_click=add_to_team, args=(uid, 'B'), use_container_width=True)
 
@@ -481,10 +583,11 @@ if not df.empty:
                 with st.container():
                     # Parse timestamp (optional formatting)
                     created_at = match['created_at'][:16].replace("T", " ")
+                    map_display = match.get('map_name') or "알 수 없음"
                     
                     c1, c2, c3 = st.columns([5, 1, 1])
                     with c1:
-                        st.markdown(f"**매치 #{match['id']}** ({created_at})")
+                        st.markdown(f"**매치 #{match['id']}** ({created_at}) | 🗺️ **{map_display}**")
                         st.markdown(f"{'🏆' if match['winning_team'] == 'A' else ''} **A팀**: {match['team_a']}")
                         st.markdown(f"{'🏆' if match['winning_team'] == 'B' else ''} **B팀**: {match['team_b']}")
                     

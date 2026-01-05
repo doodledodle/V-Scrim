@@ -13,7 +13,8 @@ CREATE TABLE users (
 CREATE TABLE matches (
     id SERIAL PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-    winning_team TEXT -- 'A' or 'B'
+    winning_team TEXT, -- 'A' or 'B'
+    map_name TEXT -- Name of the map played
 );
 
 -- Create match_participants table
@@ -22,4 +23,10 @@ CREATE TABLE match_participants (
     match_id INT REFERENCES matches(id),
     user_id BIGINT REFERENCES users(id),
     team TEXT -- 'A' or 'B'
+);
+
+-- Create maps table (New)
+CREATE TABLE maps (
+    id SERIAL PRIMARY KEY,
+    name TEXT UNIQUE
 );
