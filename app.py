@@ -25,6 +25,36 @@ except Exception as e:
     st.error("Discord 설정 오류. secrets.toml 파일을 확인해주세요.")
     st.stop()
 
+# --- RANK DEFINITIONS ---
+# Priority Order (High index = Higher Priority for sorting, Low Index for iteration if using reversed)
+# Let's map rank name to an integer priority
+RANK_PRIORITY = {
+    "레디언트": 10,
+    "불멸": 9,
+    "초월자": 8,
+    "다이아몬드": 7,
+    "플래티넘": 6,
+    "골드": 5,
+    "실버": 4,
+    "브론즈": 3,
+    "아이언": 2,
+    "언랭": 1
+}
+
+def get_tier_from_roles(role_names):
+    """Determines the highest tier from a list of role names."""
+    current_tier = "언랭"
+    current_priority = 0
+    
+    for role in role_names:
+        # Check if role contains rank name (flexible matching)
+        for rank_name, priority in RANK_PRIORITY.items():
+            if rank_name in role:
+                if priority > current_priority:
+                    current_tier = rank_name
+                    current_priority = priority
+    return current_tier
+
 # --- Functions ---
 
 def sync_discord_members():
@@ -58,26 +88,24 @@ def sync_discord_members():
                 
                 # Role Logic
                 member_role_ids = member.get('roles', [])
-                # Map IDs to Names and join
                 role_names = [role_map.get(rid, "") for rid in member_role_ids if rid in role_map]
-                # Filter out @everyone if present (usually not in the list but good to check)
                 role_names = [r for r in role_names if r != "@everyone"]
-                
-                # Simple display: Join all roles or pick top one? User asked to show role. 
-                # Comma separated might be long. Let's just join them for now.
                 roles_str = ", ".join(role_names)
+                
+                # Tier Logic
+                tier = get_tier_from_roles(role_names)
                 
                 users_data.append({
                     "id": user_id,
                     "name": username,
                     "display_name": display_name,
-                    "roles": roles_str
+                    "roles": roles_str,
+                    "tier": tier 
                 })
         
         # Perform Upsert
         if users_data:
             try:
-                # Upserting with returning=minimal to check success
                 data = supabase.table("users").upsert(users_data).execute()
                 return len(users_data), "성공적으로 동기화되었습니다."
             except Exception as e:
@@ -143,7 +171,7 @@ def record_match(team_a_ids, team_b_ids, winning_team):
 
 st.title("🔫 발로란트 내전 관리자")
 
-# Initialize Session State for Team Selection
+# Initialize Session State
 if 'team_a' not in st.session_state:
     st.session_state.team_a = []
 if 'team_b' not in st.session_state:
@@ -152,13 +180,11 @@ if 'team_b' not in st.session_state:
 def add_to_team(user_id, team):
     if team == 'A':
         if user_id not in st.session_state.team_a:
-            # Remove from B if exists
             if user_id in st.session_state.team_b:
                 st.session_state.team_b.remove(user_id)
             st.session_state.team_a.append(user_id)
     elif team == 'B':
         if user_id not in st.session_state.team_b:
-             # Remove from A if exists
             if user_id in st.session_state.team_a:
                 st.session_state.team_a.remove(user_id)
             st.session_state.team_b.append(user_id)
@@ -187,13 +213,8 @@ users = get_all_users()
 df = pd.DataFrame(users)
 
 if not df.empty:
-    # Calculate Win Rate
     df['win_rate'] = df.apply(lambda row: (row['wins'] / row['total_games'] * 100) if row['total_games'] > 0 else 0.0, axis=1)
-    
-    # Leaderboard Sorting
     df_sorted = df.sort_values(by=['win_rate', 'wins'], ascending=False)
-    
-    # Map ID to Info
     id_map = {row['id']: row for _, row in df.iterrows()}
     
     tab1, tab2 = st.tabs(["🏆 리더보드", "📝 매치 기록"])
@@ -208,10 +229,7 @@ if not df.empty:
                 "tier": "티어",
                 "wins": "승리",
                 "total_games": "전체 게임",
-                "win_rate": st.column_config.NumberColumn(
-                    "승률 (%)",
-                    format="%.1f %%"
-                )
+                "win_rate": st.column_config.NumberColumn("승률 (%)", format="%.1f %%")
             },
             hide_index=True,
             use_container_width=True
@@ -229,7 +247,7 @@ if not df.empty:
                 for uid in st.session_state.team_a:
                     u = id_map.get(uid)
                     if u is not None:
-                        st.button(f"{u['display_name']} ❌", key=f"del_a_{uid}", on_click=remove_from_team, args=(uid, 'A'))
+                        st.button(f"{u['display_name']} ({u.get('tier', '-')}) ❌", key=f"del_a_{uid}", on_click=remove_from_team, args=(uid, 'A'))
             else:
                 st.info("선택된 플레이어 없음")
 
@@ -242,13 +260,13 @@ if not df.empty:
                 for uid in st.session_state.team_b:
                     u = id_map.get(uid)
                     if u is not None:
-                        st.button(f"{u['display_name']} ❌", key=f"del_b_{uid}", on_click=remove_from_team, args=(uid, 'B'))
+                        st.button(f"{u['display_name']} ({u.get('tier', '-')}) ❌", key=f"del_b_{uid}", on_click=remove_from_team, args=(uid, 'B'))
              else:
                 st.info("선택된 플레이어 없음")
 
         st.divider()
         
-        # Match Result Submission
+        # Match Submit
         st.write("#### 결과 제출")
         winning_team = st.radio("승리 팀", ("A팀", "B팀"), horizontal=True)
         
@@ -258,10 +276,8 @@ if not df.empty:
             else:
                 mapped_winner = "A" if winning_team == "A팀" else "B"
                 success, msg = record_match(st.session_state.team_a, st.session_state.team_b, mapped_winner)
-                
                 if success:
                     st.success(msg)
-                    # Reset teams
                     st.session_state.team_a = []
                     st.session_state.team_b = []
                     time.sleep(1)
@@ -271,46 +287,42 @@ if not df.empty:
         
         st.divider()
         
-        # Player Selection List (Button Style)
+        # Player Selection (Grouped by Tier)
         st.write("#### 플레이어 목록")
-        st.caption("아래 목록에서 플레이어를 선택하여 팀에 추가하세요.")
+        st.caption("티어별로 분류된 플레이어를 확인하고 추가하세요.")
         
-        # Search/Filter
         search_query = st.text_input("검색 (이름)", "")
-        
-        # Determine who is already selected to disable or hide them? 
-        # Or just show them and allow moving?
-        # Let's show all, but maybe highlight if selected? 
-        # Simplest: Just list them. If clicked, add to team.
         
         filtered_df = df_sorted
         if search_query:
             filtered_df = df_sorted[df_sorted['display_name'].str.contains(search_query, case=False) | df_sorted['name'].str.contains(search_query, case=False)]
 
-        # Display as a table with actions
-        # We can use st.columns for each row
+        # Ordered Rank List for Display
+        RANK_ORDER = ["레디언트", "불멸", "초월자", "다이아몬드", "플래티넘", "골드", "실버", "브론즈", "아이언", "언랭"]
         
-        # Header
-        h1, h2, h3, h4 = st.columns([3, 2, 1, 1])
-        h1.markdown("**이름**")
-        h2.markdown("**역할**")
-        h3.markdown("**A팀**")
-        h4.markdown("**B팀**")
+        # If searching, show flattened list or still grouped? Grouped is fine.
         
-        for _, row in filtered_df.iterrows():
-            uid = row['id']
-            # Skip if already in a team? No, maybe we want to switch.
-            # But let's look at the UI cleaniness.
+        for rank in RANK_ORDER:
+            # Filter users in this rank
+            rank_users = filtered_df[filtered_df['tier'] == rank]
             
-            c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
-            c1.write(f"{row['display_name']} ({row['name']})")
-            c2.write(row.get('roles', '-')) # Handle missing roles safely
-            
-            # Buttons
-            # We use callbacks to update session state
-            c3.button("➕ A", key=f"add_a_{uid}", on_click=add_to_team, args=(uid, 'A'))
-            c4.button("➕ B", key=f"add_b_{uid}", on_click=add_to_team, args=(uid, 'B'))
-            
+            if not rank_users.empty:
+                with st.expander(f"💠 {rank} ({len(rank_users)}명)", expanded=True):
+                     for _, row in rank_users.iterrows():
+                        uid = row['id']
+                        c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
+                        c1.write(f"**{row['display_name']}**")
+                        c2.caption(row.get('roles', '-')) 
+                        
+                        # Check availability (Visual feedback)
+                        is_selected = uid in st.session_state.team_a or uid in st.session_state.team_b
+                        
+                        if is_selected:
+                            c3.write("✅ 선택됨")
+                        else:
+                            c3.button("➕ A", key=f"add_a_{uid}", on_click=add_to_team, args=(uid, 'A'))
+                            c4.button("➕ B", key=f"add_b_{uid}", on_click=add_to_team, args=(uid, 'B'))
+
 else:
     st.info("등록된 멤버가 없습니다. 왼쪽 사이드바에서 '디스코드 멤버 동기화'를 눌러주세요.")
 
