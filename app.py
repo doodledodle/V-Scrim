@@ -405,9 +405,9 @@ with st.sidebar:
     maps = get_all_maps()
     if maps:
         for m in maps:
-            c1, c2 = st.columns([4, 1])
-            c1.caption(m['name'])
-            if c2.button("✖️", key=f"del_map_{m['id']}"):
+            c1, c2 = st.columns([3, 1])
+            c1.write(m['name'])
+            if c2.button("🗑️", key=f"del_map_{m['id']}", help="삭제"):
                 delete_map(m['id'])
                 st.rerun()
     else:
