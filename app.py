@@ -417,6 +417,17 @@ with st.sidebar:
     if st.button("🗺️ 맵 관리하기", use_container_width=True):
         add_map_dialog()
 
+    # Footer
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style='text-align: center; color: grey; font-size: 10px;'>
+            created by doodle
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+
 # Main Data Fetch
 users = get_all_users()
 df = pd.DataFrame(users)
