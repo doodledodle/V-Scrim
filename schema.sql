@@ -3,6 +3,7 @@ CREATE TABLE users (
     id BIGINT PRIMARY KEY,
     name TEXT,
     display_name TEXT,
+    roles TEXT, -- Comma separated roles or primary role
     tier TEXT DEFAULT 'Unranked',
     wins INT DEFAULT 0,
     total_games INT DEFAULT 0
