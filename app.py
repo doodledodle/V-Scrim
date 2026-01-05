@@ -400,6 +400,11 @@ def add_map_dialog():
 # Sidebar: Sync & Maps
 with st.sidebar:
     st.header("설정 (Settings)")
+    
+    # Advanced Settings Button
+    if st.button("⚙️ 고급 설정", use_container_width=True):
+        advanced_settings_dialog()
+        
     if st.button("디스코드 멤버 동기화"):
         with st.spinner("동기화 중..."):
             count, msg = sync_discord_members()
@@ -461,6 +466,12 @@ if not df.empty:
     df_sorted = df.sort_values(by=['win_rate', 'wins'], ascending=False)
     id_map = {row['id']: row for _, row in df.iterrows()}
     
+    # Initialize Settings State
+    if 'show_individual_wr' not in st.session_state:
+        st.session_state.show_individual_wr = True
+    if 'show_team_wr' not in st.session_state:
+        st.session_state.show_team_wr = True
+    
     # Tabs
     tab1, tab2, tab3 = st.tabs(["🏆 리더보드", "📝 매치 생성", "📜 최근 기록"])
     
@@ -504,8 +515,12 @@ if not df.empty:
         col_team_a, col_vs, col_team_b = st.columns([4, 1, 4])
         
         with col_team_a:
-            st.markdown(f"### {header_a}")
-            st.caption(f"평균 승률: {team_a_avg:.1f}%")
+            header_text = header_a
+            if st.session_state.show_team_wr:
+                header_text += f" (평균 승률: {team_a_avg:.1f}%)"
+            
+            st.markdown(f"### {header_text}")
+            
             if st.session_state.team_a:
                 for uid in st.session_state.team_a:
                     u = id_map.get(uid)
@@ -514,27 +529,42 @@ if not df.empty:
                         g = u.get('total_games', 0)
                         w = u.get('wins', 0)
                         wr = (w / g * 100) if g > 0 else 0.0
-                        st.button(f"{u['display_name']} ({u.get('tier', '-')}, {wr:.1f}%) ❌", key=f"del_a_{uid}", on_click=remove_from_team, args=(uid, 'A'))
+                        
+                        display_text = f"{u['display_name']} ({u.get('tier', '-')})"
+                        if st.session_state.show_individual_wr:
+                            display_text += f", {wr:.1f}%"
+                        
+                        st.button(f"{display_text} ❌", key=f"del_a_{uid}", on_click=remove_from_team, args=(uid, 'A'))
             else:
                 st.info("선택된 플레이어 없음")
 
         with col_vs:
             st.markdown("<h3 style='text-align: center; margin-top: 20px;'>VS</h3>", unsafe_allow_html=True)
-            diff = abs(team_a_avg - team_b_avg)
-            st.markdown(f"<div style='text-align: center; color: gray; font-size: 0.8em;'>차이: {diff:.1f}%</div>", unsafe_allow_html=True)
+            if st.session_state.show_team_wr:
+                diff = abs(team_a_avg - team_b_avg)
+                st.markdown(f"<div style='text-align: center; color: gray; font-size: 0.8em;'>차이: {diff:.1f}%</div>", unsafe_allow_html=True)
 
         with col_team_b:
-             st.markdown(f"### {header_b}")
-             st.caption(f"평균 승률: {team_b_avg:.1f}%")
-             if st.session_state.team_b:
+            header_text = header_b
+            if st.session_state.show_team_wr:
+                header_text += f" (평균 승률: {team_b_avg:.1f}%)"
+            
+            st.markdown(f"### {header_text}")
+             
+            if st.session_state.team_b:
                 for uid in st.session_state.team_b:
                     u = id_map.get(uid)
                     if u is not None:
                         g = u.get('total_games', 0)
                         w = u.get('wins', 0)
                         wr = (w / g * 100) if g > 0 else 0.0
-                        st.button(f"{u['display_name']} ({u.get('tier', '-')}, {wr:.1f}%) ❌", key=f"del_b_{uid}", on_click=remove_from_team, args=(uid, 'B'))
-             else:
+                        
+                        display_text = f"{u['display_name']} ({u.get('tier', '-')})"
+                        if st.session_state.show_individual_wr:
+                            display_text += f", {wr:.1f}%"
+                        
+                        st.button(f"{display_text} ❌", key=f"del_b_{uid}", on_click=remove_from_team, args=(uid, 'B'))
+            else:
                 st.info("선택된 플레이어 없음")
 
         st.divider()
