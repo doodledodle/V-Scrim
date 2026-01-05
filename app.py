@@ -368,6 +368,19 @@ def get_recent_matches(limit=10):
         st.error(f"기록 불러오기 실패: {str(e)}")
         return []
 
+@st.dialog("새로운 맵 추가")
+def add_map_dialog():
+    new_map_name = st.text_input("맵 이름", placeholder="예: 어센트")
+    if st.button("추가하기", type="primary"):
+        if new_map_name:
+            s, m = add_map(new_map_name)
+            if s:
+                st.success(m)
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error(m)
+
 # Sidebar: Sync & Maps
 with st.sidebar:
     st.header("설정 (Settings)")
@@ -384,12 +397,9 @@ with st.sidebar:
     st.divider()
     
     st.header("맵 관리 (Maps)")
-    new_map = st.text_input("새 맵 추가", placeholder="예: 어센트")
-    if st.button("맵 추가"):
-        if new_map:
-            s, m = add_map(new_map)
-            if s: st.success(m); time.sleep(0.5); st.rerun()
-            else: st.error(m)
+    
+    if st.button("➕ 맵 추가하기", use_container_width=True):
+        add_map_dialog()
             
     st.write("📋 **등록된 맵**")
     maps = get_all_maps()
