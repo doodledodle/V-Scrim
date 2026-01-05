@@ -446,11 +446,27 @@ if not df.empty:
         team_a_avg = calculate_team_avg_win_rate(st.session_state.team_a, id_map)
         team_b_avg = calculate_team_avg_win_rate(st.session_state.team_b, id_map)
         
+        # Initialize Attack Team State
+        if 'attack_team' not in st.session_state:
+            st.session_state.attack_team = None
+            
+        # Determine Headers based on side
+        header_a = "🅰️ A팀"
+        header_b = "🅱️ B팀"
+        
+        if st.session_state.attack_team == 'A':
+            header_a += " (⚔️ 공격)"
+            header_b += " (🛡️ 수비)"
+        elif st.session_state.attack_team == 'B':
+            header_a += " (🛡️ 수비)"
+            header_b += " (⚔️ 공격)"
+        
         # Display Selected Teams
         col_team_a, col_vs, col_team_b = st.columns([4, 1, 4])
         
         with col_team_a:
-            st.markdown(f"### 🅰️ A팀 (평균 승률: {team_a_avg:.1f}%)")
+            st.markdown(f"### {header_a}")
+            st.caption(f"평균 승률: {team_a_avg:.1f}%")
             if st.session_state.team_a:
                 for uid in st.session_state.team_a:
                     u = id_map.get(uid)
@@ -464,12 +480,13 @@ if not df.empty:
                 st.info("선택된 플레이어 없음")
 
         with col_vs:
-            st.markdown("<h3 style='text-align: center;'>VS</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align: center; margin-top: 20px;'>VS</h3>", unsafe_allow_html=True)
             diff = abs(team_a_avg - team_b_avg)
             st.markdown(f"<div style='text-align: center; color: gray; font-size: 0.8em;'>차이: {diff:.1f}%</div>", unsafe_allow_html=True)
 
         with col_team_b:
-             st.markdown(f"### 🅱️ B팀 (평균 승률: {team_b_avg:.1f}%)")
+             st.markdown(f"### {header_b}")
+             st.caption(f"평균 승률: {team_b_avg:.1f}%")
              if st.session_state.team_b:
                 for uid in st.session_state.team_b:
                     u = id_map.get(uid)
@@ -553,13 +570,33 @@ if not df.empty:
 
         st.divider()
         
-        # Match Submit
-        st.markdown("### 🏆 승리 팀 선택") # Enlarge Header
-        winning_team = st.radio("승리 팀", ("A팀", "B팀"), horizontal=True, label_visibility="collapsed")
+        st.divider()
         
-        col_submit, _ = st.columns([1, 2]) # Layout adjustment (Left aligned, smaller width)
+        # --- Bottom Section: Side Select & Result Submit ---
+        c_side, c_submit = st.columns(2)
         
-        with col_submit:
+        with c_side:
+            st.markdown("### ⚔️ 공수 결정 (Coin Toss)")
+            if st.button("🪙 공격/수비 랜덤 추첨", use_container_width=True):
+                import random
+                sides = ['A', 'B']
+                picked = random.choice(sides)
+                st.session_state.attack_team = picked
+                st.rerun()
+            
+            # Display current side status
+            if st.session_state.attack_team:
+                if st.session_state.attack_team == 'A':
+                    st.success("**A팀**이 공격(Attack) 입니다!")
+                else:
+                    st.success("**B팀**이 공격(Attack) 입니다!")
+            else:
+                st.info("버튼을 눌러 공격 팀을 정하세요.")
+
+        with c_submit:
+            st.markdown("### 🏆 승리 팀 선택") 
+            winning_team = st.radio("승리 팀", ("A팀", "B팀"), horizontal=True, label_visibility="collapsed")
+            
             if st.button("결과 저장하기", type="primary", use_container_width=True):
                 if not st.session_state.team_a or not st.session_state.team_b:
                     st.toast("⚠️ 양 팀에 최소 한 명 이상의 플레이어가 있어야 합니다.", icon="⚠️")
@@ -570,10 +607,9 @@ if not df.empty:
                     success, msg = record_match(st.session_state.team_a, st.session_state.team_b, mapped_winner, st.session_state.selected_map)
                     if success:
                         st.success(msg)
-                        # Remove team reset for Bo3 support
-                        # st.session_state.team_a = [] 
-                        # st.session_state.team_b = []
-                        st.session_state.selected_map = None # Reset map only
+                        # Reset map and attack side, keep teams
+                        st.session_state.selected_map = None 
+                        st.session_state.attack_team = None
                         time.sleep(1)
                         st.rerun()
                     else:
