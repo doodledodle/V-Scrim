@@ -397,6 +397,26 @@ def add_map_dialog():
     else:
         st.info("등록된 맵이 없습니다.")
 
+@st.dialog("고급 설정 (Advanced Settings)")
+def advanced_settings_dialog():
+    st.write("### ⚙️ 표시 설정")
+    
+    # Toggle for Individual Win Rate
+    # Default is True, so we use checkboxes
+    show_individual = st.checkbox("개인 승률 표시 (Player Win Rate)", value=st.session_state.show_individual_wr)
+    if show_individual != st.session_state.show_individual_wr:
+        st.session_state.show_individual_wr = show_individual
+        st.rerun()
+
+    # Toggle for Team Win Rate
+    show_team = st.checkbox("팀 평균 승률 표시 (Team Avg Win Rate)", value=st.session_state.show_team_wr)
+    if show_team != st.session_state.show_team_wr:
+        st.session_state.show_team_wr = show_team
+        st.rerun()
+    
+    st.divider()
+    st.caption("설정은 현재 세션 동안 유지됩니다.")
+
 # Sidebar: Sync & Maps
 with st.sidebar:
     st.header("설정 (Settings)")
