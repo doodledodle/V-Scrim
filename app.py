@@ -451,19 +451,24 @@ if not df.empty:
             
             if not rank_users.empty:
                 with st.expander(f"💠 {rank} ({len(rank_users)}명)", expanded=True):
-                     for _, row in rank_users.iterrows():
+                    # Grid Layout: 3 columns per row
+                    cols = st.columns(3)
+                    for idx, (_, row) in enumerate(rank_users.iterrows()):
                         uid = row['id']
-                        c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
-                        c1.write(f"**{row['display_name']}**")
-                        c2.caption(f"{row.get('roles', '-')} | 승률: {row['win_rate']:.1f}%") 
-                        
-                        is_selected = uid in st.session_state.team_a or uid in st.session_state.team_b
-                        
-                        if is_selected:
-                            c3.write("✅ 선택됨")
-                        else:
-                            c3.button("➕ A", key=f"add_a_{uid}", on_click=add_to_team, args=(uid, 'A'))
-                            c4.button("➕ B", key=f"add_b_{uid}", on_click=add_to_team, args=(uid, 'B'))
+                        with cols[idx % 3]:
+                            with st.container(border=True):
+                                st.markdown(f"**{row['display_name']}**")
+                                # Show Tier and WR
+                                st.caption(f"{rank} | 승률: {row['win_rate']:.1f}%")
+                                
+                                is_selected = uid in st.session_state.team_a or uid in st.session_state.team_b
+                                
+                                if is_selected:
+                                    st.write("✅ **선택됨**")
+                                else:
+                                    b1, b2 = st.columns(2)
+                                    b1.button("➕ A", key=f"add_a_{uid}", on_click=add_to_team, args=(uid, 'A'), use_container_width=True)
+                                    b2.button("➕ B", key=f"add_b_{uid}", on_click=add_to_team, args=(uid, 'B'), use_container_width=True)
 
     with tab3:
         st.subheader("📜 최근 매치 기록")
