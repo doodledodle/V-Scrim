@@ -368,10 +368,11 @@ def get_recent_matches(limit=10):
         st.error(f"기록 불러오기 실패: {str(e)}")
         return []
 
-@st.dialog("새로운 맵 추가")
+@st.dialog("맵 관리 (Map Management)")
 def add_map_dialog():
+    st.write("### 🆕 맵 추가")
     new_map_name = st.text_input("맵 이름", placeholder="예: 어센트")
-    if st.button("추가하기", type="primary"):
+    if st.button("추가하기", type="primary", use_container_width=True):
         if new_map_name:
             s, m = add_map(new_map_name)
             if s:
@@ -380,6 +381,21 @@ def add_map_dialog():
                 st.rerun()
             else:
                 st.error(m)
+    
+    st.divider()
+    
+    st.write("### 📋 등록된 맵 목록")
+    maps = get_all_maps()
+    if maps:
+        for m in maps:
+            c1, c2 = st.columns([4, 1])
+            c1.write(f"- {m['name']}")
+            # Simple 'x' button for delete
+            if c2.button("x", key=f"del_map_{m['id']}", help="삭제"):
+                delete_map(m['id'])
+                st.rerun()
+    else:
+        st.info("등록된 맵이 없습니다.")
 
 # Sidebar: Sync & Maps
 with st.sidebar:
@@ -398,20 +414,8 @@ with st.sidebar:
     
     st.header("맵 관리 (Maps)")
     
-    if st.button("➕ 맵 추가하기", use_container_width=True):
+    if st.button("🗺️ 맵 관리하기", use_container_width=True):
         add_map_dialog()
-            
-    st.write("📋 **등록된 맵**")
-    maps = get_all_maps()
-    if maps:
-        for m in maps:
-            c1, c2 = st.columns([3, 1])
-            c1.write(m['name'])
-            if c2.button("🗑️", key=f"del_map_{m['id']}", help="삭제"):
-                delete_map(m['id'])
-                st.rerun()
-    else:
-        st.caption("등록된 맵이 없습니다.")
 
 # Main Data Fetch
 users = get_all_users()
