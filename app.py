@@ -645,17 +645,24 @@ if not df.empty:
                 lobby_users.append(uid)
         
         if lobby_users:
-            # Sort by rank priority roughly? or just name
-            # Let's sort by tier if possible
+            # Sort by rank priority (Descending) then Name
             lobby_users_data = [id_map.get(uid) for uid in lobby_users if uid in id_map]
-            # Simple Sort
-            lobby_users_data.sort(key=lambda x: x['display_name'])
+            
+            lobby_users_data.sort(key=lambda x: ( -RANK_PRIORITY.get(x.get('tier', '언랭'), 0), x['display_name'] ))
 
             # Display as list with buttons
             for u in lobby_users_data:
                 c1, c2, c3, c4 = st.columns([4, 2, 2, 2])
                 with c1:
-                    st.write(f"**{u['display_name']}** ({u.get('tier', '-')})")
+                    display_str = f"**{u['display_name']}** ({u.get('tier', '-')})"
+                    if st.session_state.show_individual_wr:
+                        # Calculate WR
+                        g = u.get('total_games', 0)
+                        w = u.get('wins', 0)
+                        wr = (w / g * 100) if g > 0 else 0.0
+                        display_str += f" | {wr:.1f}%"
+                        
+                    st.write(display_str)
                 with c2:
                     st.button("A팀으로", key=f"to_a_{u['id']}", on_click=add_to_team, args=(u['id'], 'A'), use_container_width=True)
                 with c3:
