@@ -5,7 +5,7 @@ import pandas as pd
 import time
 
 # --- Configuration & Setup ---
-st.set_page_config(page_title="발로란트 내전 관리자", layout="wide")
+st.set_page_config(page_title=":Defying 내전 관리", layout="wide")
 
 # Initialize Supabase Client
 try:
@@ -231,7 +231,7 @@ def record_match(team_a_ids, team_b_ids, winning_team, map_name):
 
 # --- UI Layout ---
 
-st.title("🔫 발로란트 내전 관리자")
+st.title("🔫 :Defying 내전 관리")
 
 # Initialize Session State
 if 'team_a' not in st.session_state:
@@ -445,7 +445,7 @@ with st.sidebar:
     if st.button("⚙️ 고급 설정", use_container_width=True):
         advanced_settings_dialog()
         
-    if st.button("디스코드 멤버 동기화"):
+    if st.button("디스코드 멤버 동기화", use_container_width=True):
         with st.spinner("동기화 중..."):
             count, msg = sync_discord_members()
             if count > 0:
