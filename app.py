@@ -238,8 +238,24 @@ if 'team_a' not in st.session_state:
     st.session_state.team_a = []
 if 'team_b' not in st.session_state:
     st.session_state.team_b = []
+if 'participants' not in st.session_state:
+    st.session_state.participants = set()
+
+def toggle_participation(user_id):
+    if user_id in st.session_state.participants:
+        st.session_state.participants.remove(user_id)
+        # Also remove from teams if present
+        if user_id in st.session_state.team_a:
+            st.session_state.team_a.remove(user_id)
+        if user_id in st.session_state.team_b:
+            st.session_state.team_b.remove(user_id)
+    else:
+        st.session_state.participants.add(user_id)
 
 def add_to_team(user_id, team):
+    # Ensure participant
+    st.session_state.participants.add(user_id)
+    
     if team == 'A':
         if user_id not in st.session_state.team_a:
             if user_id in st.session_state.team_b:
@@ -251,7 +267,8 @@ def add_to_team(user_id, team):
                 st.session_state.team_a.remove(user_id)
             st.session_state.team_b.append(user_id)
 
-def remove_from_team(user_id, team):
+def remove_from_team_to_lobby(user_id, team):
+    """Removes from specific team but keeps in lobby (participants)"""
     if team == 'A' and user_id in st.session_state.team_a:
         st.session_state.team_a.remove(user_id)
     elif team == 'B' and user_id in st.session_state.team_b:
@@ -582,9 +599,9 @@ if not df.empty:
                         if st.session_state.show_individual_wr:
                             display_text += f", {wr:.1f}%"
                         
-                        st.button(f"{display_text} ❌", key=f"del_a_{uid}", on_click=remove_from_team, args=(uid, 'A'))
+                        st.button(f"{display_text} ❌", key=f"del_a_{uid}", on_click=remove_from_team_to_lobby, args=(uid, 'A'))
             else:
-                st.info("선택된 플레이어 없음")
+                st.info("플레이어를 배치하세요 (Lobby)")
 
         with col_vs:
             st.markdown("<h3 style='text-align: center; margin-top: 20px;'>VS</h3>", unsafe_allow_html=True)
@@ -611,10 +628,43 @@ if not df.empty:
                         if st.session_state.show_individual_wr:
                             display_text += f", {wr:.1f}%"
                         
-                        st.button(f"{display_text} ❌", key=f"del_b_{uid}", on_click=remove_from_team, args=(uid, 'B'))
+                        st.button(f"{display_text} ❌", key=f"del_b_{uid}", on_click=remove_from_team_to_lobby, args=(uid, 'B'))
             else:
-                st.info("선택된 플레이어 없음")
+                st.info("플레이어를 배치하세요 (Lobby)")
 
+        st.divider()
+
+        # --- LOBBY SECTION (New) ---
+        st.markdown("### 🏟️ 대기실 (Lobby) / 팀 배정")
+        st.caption("아래 플레이어 목록에서 참여(Join)시킨 인원이 여기 표시됩니다. A/B 팀으로 배정하세요.")
+        
+        # Filter participants who are NOT in a team
+        lobby_users = []
+        for uid in st.session_state.participants:
+            if uid not in st.session_state.team_a and uid not in st.session_state.team_b:
+                lobby_users.append(uid)
+        
+        if lobby_users:
+            # Sort by rank priority roughly? or just name
+            # Let's sort by tier if possible
+            lobby_users_data = [id_map.get(uid) for uid in lobby_users if uid in id_map]
+            # Simple Sort
+            lobby_users_data.sort(key=lambda x: x['display_name'])
+
+            # Display as list with buttons
+            for u in lobby_users_data:
+                c1, c2, c3, c4 = st.columns([4, 2, 2, 2])
+                with c1:
+                    st.write(f"**{u['display_name']}** ({u.get('tier', '-')})")
+                with c2:
+                    st.button("A팀으로", key=f"to_a_{u['id']}", on_click=add_to_team, args=(u['id'], 'A'), use_container_width=True)
+                with c3:
+                    st.button("B팀으로", key=f"to_b_{u['id']}", on_click=add_to_team, args=(u['id'], 'B'), use_container_width=True)
+                with c4:
+                    st.button("제외", key=f"out_{u['id']}", on_click=toggle_participation, args=(u['id'],))
+        else:
+            st.info("대기 중인 인원이 없습니다. 하단에서 '참여'를 눌러주세요.")
+        
         st.divider()
         
         # --- Random Map Selector ---
@@ -720,7 +770,10 @@ if not df.empty:
                     success, msg = record_match(st.session_state.team_a, st.session_state.team_b, mapped_winner, st.session_state.selected_map)
                     if success:
                         st.success(msg)
-                        # Reset map and attack side, keep teams
+                        # Reset map and attack side, keep teams? Or reset teams too?
+                        # Usually keep teams matches often happen in series. 
+                        # But maybe we should remove from Lobby but keep in Participants?
+                        # For now keep as is.
                         st.session_state.selected_map = None 
                         st.session_state.attack_team = None
                         time.sleep(1)
@@ -732,7 +785,7 @@ if not df.empty:
         
         # Player Selection (Grouped by Tier)
         st.write("#### 플레이어 목록")
-        st.caption("티어별로 분류된 플레이어를 확인하고 추가하세요.")
+        st.caption("참여(Join) 버튼을 눌러 대기실로 이동시키세요.")
         
         search_query = st.text_input("검색 (이름)", "")
         
@@ -763,15 +816,24 @@ if not df.empty:
                                     
                                 st.caption(info_text)
                                 
-                                is_selected = uid in st.session_state.team_a or uid in st.session_state.team_b
+                                is_participating = uid in st.session_state.participants
                                 
-                                if is_selected:
-                                    st.write("✅ **선택됨**")
+                                if is_participating:
+                                    # Show if in Team A or B
+                                    if uid in st.session_state.team_a:
+                                        st.success("🅰️ A팀")
+                                    elif uid in st.session_state.team_b:
+                                        st.success("🅱️ B팀")
+                                    else:
+                                        st.info("🕒 대기 중")
+                                    
+                                    if st.button("참여 취소", key=f"cancel_{uid}", use_container_width=True):
+                                        toggle_participation(uid)
+                                        st.rerun()
                                 else:
-                                    b1, b2 = st.columns(2)
-                                    # Fix: Don't use duplicate keys in loop
-                                    b1.button("➕ A", key=f"add_a_{uid}", on_click=add_to_team, args=(uid, 'A'), use_container_width=True)
-                                    b2.button("➕ B", key=f"add_b_{uid}", on_click=add_to_team, args=(uid, 'B'), use_container_width=True)
+                                    if st.button("참여 (Join)", key=f"join_{uid}", use_container_width=True):
+                                        toggle_participation(uid)
+                                        st.rerun()
 
     with tab3:
         st.subheader("📜 최근 매치 기록")
