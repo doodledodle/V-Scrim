@@ -811,15 +811,13 @@ if not df.empty:
                             
                             # Always use a standard container for layout stability
                             with st.container(border=True):
-                                # Status Indicator Area (Fixed Height consistency)
+                                # Name Display with Background Color for Participants
+                                display_name = row['display_name']
                                 if is_participating:
-                                    st.success("참여 중", icon="✅")
+                                    # Use Streamlit's colored background syntax for pastel effect
+                                    st.markdown(f":green-background[**{display_name}**]")
                                 else:
-                                    # Spacer to match st.success height (approx 48-50px including margins)
-                                    # st.markdown with a div of minimal height + padding
-                                    st.markdown("<div style='height: 46px; margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
-                                
-                                st.markdown(f"**{row['display_name']}**")
+                                    st.markdown(f"**{display_name}**")
                                 
                                 info_text = f"{rank}"
                                 if st.session_state.show_individual_wr:
