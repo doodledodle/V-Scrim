@@ -818,19 +818,25 @@ if not df.empty:
                                 
                                 is_participating = uid in st.session_state.participants
                                 
+                                # Status Area with fixed height reservation
+                                status_slot = st.empty()
+                                
                                 if is_participating:
                                     # Show if in Team A or B
                                     if uid in st.session_state.team_a:
-                                        st.success("🅰️ A팀")
+                                        status_slot.success("🅰️ A팀")
                                     elif uid in st.session_state.team_b:
-                                        st.success("🅱️ B팀")
+                                        status_slot.success("🅱️ B팀")
                                     else:
-                                        st.info("🕒 대기 중")
+                                        status_slot.info("🕒 대기 중")
                                     
                                     if st.button("참여 취소", key=f"cancel_{uid}", use_container_width=True):
                                         toggle_participation(uid)
                                         st.rerun()
                                 else:
+                                    # Reserve space (Invisible box to match alert height)
+                                    status_slot.markdown("<div style='height: 48px; border: 1px solid transparent; margin-bottom: 1rem;'>&nbsp;</div>", unsafe_allow_html=True)
+                                    
                                     if st.button("참여 (Join)", key=f"join_{uid}", use_container_width=True):
                                         toggle_participation(uid)
                                         st.rerun()
