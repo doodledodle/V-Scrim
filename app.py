@@ -79,9 +79,16 @@ def sync_discord_members():
     if response.status_code == 200:
         members = response.json()
         users_data = []
+        bot_ids = []
+
         for member in members:
             user = member.get('user', {})
             if user:
+                # Check for bot
+                if user.get('bot'):
+                    bot_ids.append(int(user['id']))
+                    continue
+                
                 user_id = int(user['id'])
                 username = user.get('username')
                 display_name = member.get('nick') or user.get('global_name') or username
@@ -103,13 +110,26 @@ def sync_discord_members():
                     "tier": tier 
                 })
         
-        # Perform Upsert
+        # Perform Upsert for Real Users
+        upsert_count = 0
         if users_data:
             try:
-                data = supabase.table("users").upsert(users_data).execute()
-                return len(users_data), "성공적으로 동기화되었습니다."
+                supabase.table("users").upsert(users_data).execute()
+                upsert_count = len(users_data)
             except Exception as e:
                 return 0, str(e)
+
+        # Remove Bots from DB if they exist
+        if bot_ids:
+            try:
+                supabase.table("users").delete().in_("id", bot_ids).execute()
+            except Exception as e:
+                # Log error but don't fail the whole sync? Or maybe we should.
+                # For now let's just proceed.
+                print(f"Failed to remove bots: {e}")
+
+        if upsert_count > 0 or bot_ids:
+             return upsert_count, f"성공적으로 동기화되었습니다. (봇 {len(bot_ids)}명 제외)"
         else:
              return 0, "멤버를 찾을 수 없습니다."
 
