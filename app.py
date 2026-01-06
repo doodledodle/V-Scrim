@@ -84,14 +84,16 @@ def sync_discord_members():
         for member in members:
             user = member.get('user', {})
             if user:
-                # Check for bot
-                if user.get('bot'):
-                    bot_ids.append(int(user['id']))
-                    continue
-                
                 user_id = int(user['id'])
                 username = user.get('username')
                 display_name = member.get('nick') or user.get('global_name') or username
+
+                # Check for bot OR specific nickname
+                if user.get('bot') or display_name == "부스터봇":
+                    bot_ids.append(int(user['id']))
+                    continue
+                
+                # Role Logic
                 
                 # Role Logic
                 member_role_ids = member.get('roles', [])
