@@ -812,7 +812,7 @@ if not df.empty:
                             # Determine container type based on participation
                             # Valid container context
                             if is_participating:
-                                container_context = st.success(icon="✅") # Green box with icon
+                                container_context = st.success("참여 중", icon="✅") # Green box with icon
                             else:
                                 container_context = st.container(border=True) # Standard gray border box
 
