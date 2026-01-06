@@ -807,7 +807,16 @@ if not df.empty:
                     for idx, (_, row) in enumerate(rank_users.iterrows()):
                         uid = row['id']
                         with cols[idx % 3]:
-                            with st.container(border=True):
+                            is_participating = uid in st.session_state.participants
+                            
+                            # Determine container type based on participation
+                            # Valid container context
+                            if is_participating:
+                                container_context = st.success(icon="✅") # Green box with icon
+                            else:
+                                container_context = st.container(border=True) # Standard gray border box
+
+                            with container_context:
                                 st.markdown(f"**{row['display_name']}**")
                                 # Show Tier and WR conditionally
                                 info_text = f"{rank}"
@@ -816,27 +825,11 @@ if not df.empty:
                                     
                                 st.caption(info_text)
                                 
-                                is_participating = uid in st.session_state.participants
-                                
-                                # Status Area with fixed height reservation
-                                status_slot = st.empty()
-                                
                                 if is_participating:
-                                    # Show if in Team A or B
-                                    if uid in st.session_state.team_a:
-                                        status_slot.success("🅰️ A팀")
-                                    elif uid in st.session_state.team_b:
-                                        status_slot.success("🅱️ B팀")
-                                    else:
-                                        status_slot.info("🕒 대기 중")
-                                    
                                     if st.button("참여 취소", key=f"cancel_{uid}", use_container_width=True):
                                         toggle_participation(uid)
                                         st.rerun()
                                 else:
-                                    # Reserve space (Invisible box to match alert height)
-                                    status_slot.markdown("<div style='height: 48px; border: 1px solid transparent; margin-bottom: 1rem;'>&nbsp;</div>", unsafe_allow_html=True)
-                                    
                                     if st.button("참여 (Join)", key=f"join_{uid}", use_container_width=True):
                                         toggle_participation(uid)
                                         st.rerun()
