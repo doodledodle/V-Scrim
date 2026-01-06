@@ -809,20 +809,21 @@ if not df.empty:
                         with cols[idx % 3]:
                             is_participating = uid in st.session_state.participants
                             
-                            # Determine container type based on participation
-                            # Valid container context
-                            if is_participating:
-                                container_context = st.success("참여 중", icon="✅") # Green box with icon
-                            else:
-                                container_context = st.container(border=True) # Standard gray border box
-
-                            with container_context:
+                            # Always use a standard container for layout stability
+                            with st.container(border=True):
+                                # Status Indicator Area (Fixed Height consistency)
+                                if is_participating:
+                                    st.success("참여 중", icon="✅")
+                                else:
+                                    # Spacer to match st.success height (approx 48-50px including margins)
+                                    # st.markdown with a div of minimal height + padding
+                                    st.markdown("<div style='height: 46px; margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+                                
                                 st.markdown(f"**{row['display_name']}**")
-                                # Show Tier and WR conditionally
+                                
                                 info_text = f"{rank}"
                                 if st.session_state.show_individual_wr:
                                     info_text += f" | 승률: {row['win_rate']:.1f}%"
-                                    
                                 st.caption(info_text)
                                 
                                 if is_participating:
