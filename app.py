@@ -112,6 +112,16 @@ def sync_discord_members():
                     "tier": tier 
                 })
         
+        # Get existing users to check who left
+        try:
+            existing_users_resp = supabase.table("users").select("id").execute()
+            existing_user_ids = {int(u['id']) for u in existing_users_resp.data}
+        except Exception:
+            existing_user_ids = set()
+            
+        valid_user_ids = {int(u['id']) for u in users_data}
+        left_user_ids = list(existing_user_ids - valid_user_ids - set(bot_ids))
+
         # Perform Upsert for Real Users
         upsert_count = 0
         if users_data:
@@ -120,6 +130,13 @@ def sync_discord_members():
                 upsert_count = len(users_data)
             except Exception as e:
                 return 0, str(e)
+
+        # Mark left users as inactive
+        if left_user_ids:
+            try:
+                supabase.table("users").update({"roles": "LEFT_SERVER", "tier": "Unranked"}).in_("id", left_user_ids).execute()
+            except Exception as e:
+                print(f"Failed to update left users: {e}")
 
         # Remove Bots from DB if they exist
         if bot_ids:
@@ -130,8 +147,8 @@ def sync_discord_members():
                 # For now let's just proceed.
                 print(f"Failed to remove bots: {e}")
 
-        if upsert_count > 0 or bot_ids:
-             return upsert_count, f"성공적으로 동기화되었습니다. (봇 {len(bot_ids)}명 제외)"
+        if upsert_count > 0 or bot_ids or left_user_ids:
+             return upsert_count, f"성공적으로 동기화되었습니다. (봇 {len(bot_ids)}명 제외, {len(left_user_ids)}명 비활성화)"
         else:
              return 0, "멤버를 찾을 수 없습니다."
 
@@ -139,8 +156,8 @@ def sync_discord_members():
         return 0, f"오류 발생 {response.status_code}: {response.text}"
 
 def get_all_users():
-    """Retrieves all users from Supabase."""
-    response = supabase.table("users").select("*").execute()
+    """Retrieves all active users from Supabase."""
+    response = supabase.table("users").select("*").neq("roles", "LEFT_SERVER").execute()
     return response.data
 
 # Helper for Map Management
